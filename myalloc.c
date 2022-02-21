@@ -1,13 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "myalloc.h"
-#define ALIGNMENT 16   // Must be power of 2
-#define PAGE_SIZE 1024
-#define GET_PAD(x) ((ALIGNMENT - 1) - ((x) - 1) & (ALIGNMENT - 1))
-#define PADDED_SIZE(x) ((x) + GET_PAD(x))
-#define PTR_OFFSET(p, offset) ((void*)((char *)(p) + (offset)))
-#define PADDED_BLOCK_SIZE (PADDED_SIZE(sizeof(struct block)))
-
 
 struct block *head = NULL;
 
@@ -83,14 +76,32 @@ void *myalloc(int size){
         initialize_heap();
     }
     struct block *p = (struct block *) find_space(size); // Returns pointer to available block of memory, or NULL if none available
-    for(p; p == NULL; increase_heap_size(size), p = find_space(size)); // Increase the heap size then find space, until find space succeeds (p is not null)
+    for(p; p == NULL; increase_heap_size(size), p = find_space(size)); // Increase the heap size and find space until find space succeeds (p is not null)
 
     return p + 1; // Return pointer to data (instead of block)
+}
+
+void coalesce(void){
+    printf("Coalescing Data\n");
+    struct block *p = head;
+    struct block *next;
+    while(p->next != NULL){ // Loop until end of list
+        if((p->in_use == 0) && (p->next->in_use == 0)){ // If current and next block are free
+            printf("Combining block starting at: %p with block starting at %p\n", p, p->next);
+            next = p->next;
+            p->size = p->size + p->next->size + PADDED_BLOCK_SIZE;
+            p->next = next->next;
+        }else{
+            p = p->next;
+        }
+    }
 }
 
 void myfree(void * p){
     printf("Freeing block starting at %p\n", ((struct block *) p) - 1);
     (((struct block *) p) - 1)->in_use = 0; // Set the block in use value to 0. The block is 1 block size behind the start of the data pointer
+    print_data();
+    coalesce();        
 }
 
 void print_data(void)
@@ -118,12 +129,18 @@ void print_data(void)
 
 int main(void){
 
+    void *p;
+
     myalloc(1008);     print_data();
-    myalloc(48);       print_data();
-    myalloc(50);       print_data();
-    myalloc(50);       print_data();
-    myalloc(784);      print_data();
-    myalloc(32);       print_data();
-    
+    p = myalloc(48);   print_data();
+    myfree(p);         print_data();
+    p = myalloc(50);   print_data();
+    myfree(p);         print_data();
+    p = myalloc(65);   print_data();
+    myfree(p);         print_data();
+    myalloc(100);      print_data();
+    p = myalloc(300);  print_data();
+    myfree(p);         print_data();
+
     return 0;
 }
