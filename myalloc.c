@@ -12,9 +12,9 @@ int check_block_availability(struct block *p, int size){
 }
 
 void split_space(struct block **p, int remaining_size, int size){
-    // printf("Creating intermediary node at end of current nodes data\n");
+    // printf("Creating intermediary node at end of current nodes data\n")
     (*p)->size = PADDED_SIZE(size);
-    struct block *next = (*p)->next;
+    struct block *next = (*p)->next; // Store pointer to old blocks next for later
     (*p)->next = (struct block *) (((char*)((*p) + 1)) + PADDED_SIZE(size)); // Start of next block = Address of start of current block + size of padded block + size of padded data
     (*p)->next->size = remaining_size - PADDED_BLOCK_SIZE; // Size of new node is the size of the old node - size of new data - size of a new node
     (*p)->next->in_use = 0; // New block is not being used
@@ -24,15 +24,18 @@ void split_space(struct block **p, int remaining_size, int size){
 void *find_space(int size){
 
     for(struct block *p = head; p != NULL; p = p->next){
-        if(check_block_availability(p, size) == 1){ // Find first block with enough available space
+        if(check_block_availability(p, size) == 1){ // Find first free block with enough available space
             // Usable block found!
             printf("Allocating %d bytes (%d with padding, %ld with padding and padded block) in heap starting at address: %p.\n", size, PADDED_SIZE(size), (PADDED_SIZE(size) + PADDED_BLOCK_SIZE), p);
+
             int remaining_size = p->size - PADDED_SIZE(size);
-            if(remaining_size >= PADDED_BLOCK_SIZE + ALIGNMENT){ // Split space into 2 blocks if there is enough space left over for a block head and aligned data
+            if(remaining_size >= (int) (PADDED_BLOCK_SIZE + ALIGNMENT)){ // Split space into 2 blocks if there is enough space left over for a new block header and some padded data (at least 16 bytes)
                 split_space(&p, remaining_size, size);
-            }else{ 
+            }
+            else{ 
                 printf("Not enough space in current block for intermediary node, Allocating %d bytes to full block starting at %p\n", size, p);
             }
+
             p->in_use = 1;
             return p; // Return address to block
         }
@@ -45,25 +48,22 @@ void increase_heap_size(int size){
     printf("Could not find space to allocate %d bytes (%d with padding) in heap. Increasing heap size by %d\n", size, PADDED_SIZE(size), PAGE_SIZE);
 
     struct block *p = head;
-    
-    while(p->next != NULL){
-        p = p->next;
-    }
+    for(p; p->next != NULL; p = p->next); // Set *p to last node in list
 
     if(p->in_use == 1){ // Create new block at end of heap
         p->next = (struct block *) sbrk(PAGE_SIZE);
-        p->next->size = ((char*)(((char*)sbrk(0)) - ((char*) p->next)) - ( (char*) PADDED_BLOCK_SIZE) );
+        p->next->size = (PAGE_SIZE - PADDED_BLOCK_SIZE);
         p->next->in_use = 0;
         print_data();
-        
-    }else{ // Grow free block at end of heap
+    }
+    else{ // Grow free block at end of heap
         sbrk(PAGE_SIZE); // Increment the break point by PAGE_SIZE
-        p->size = (char*)sbrk(0) - (char*) (p + 1);
+        p->size = (char*)sbrk(0) - (char*) (p + 1); // The size will be end end of the memory - the start of the data for the last block
         print_data();
     }   
 }
 
-void initialize_heap(){ // Create tart of list, and intiialze all its values
+void initialize_heap(){ // Create start of list, and intiialze all its values
     printf("Initial Location of inital break point: %p\n", sbrk(0)); // For some reason this print statment is necessary to keep successive calls to brk from incrimenting the break point by 130K bytes
     head = (struct block *) sbrk(PAGE_SIZE);
     head->next = NULL;
@@ -114,7 +114,7 @@ void print_data(void)
     }
 
     while (b != NULL) {
-        // Uncomment the following line if you want to see the pointer values
+        // Uncomment    the following line if you want to see the pointer values
         printf("[%p:%d,%s]", b, b->size, b->in_use? "used": "free");
         //printf("[%d,%s]", b->size, b->in_use? "used": "free");
         if (b->next != NULL) {
@@ -129,18 +129,18 @@ void print_data(void)
 
 int main(void){
 
-    void *p;
+    void *p, *q, *r, *s;
 
-    myalloc(1008);     print_data();
-    p = myalloc(48);   print_data();
-    myfree(p);         print_data();
-    p = myalloc(50);   print_data();
-    myfree(p);         print_data();
-    p = myalloc(65);   print_data();
-    myfree(p);         print_data();
-    myalloc(100);      print_data();
-    p = myalloc(300);  print_data();
-    myfree(p);         print_data();
+    p = myalloc(1008); print_data();
+    q = myalloc(20); print_data();
+    r = myalloc(30); print_data();
+    s = myalloc(4000); print_data();
+
+    myfree(q); print_data();
+    myfree(p); print_data();
+    myfree(s); print_data();
+    myfree(r); print_data();
+
 
     return 0;
 }
